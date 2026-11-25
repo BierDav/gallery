@@ -1,0 +1,34 @@
+# The Noodle Gallery server image: upstream's own server/Dockerfile, built from
+# this branch's source (server and web carry the fork's patches), plus the
+# nearby-albums workflow plugin. docker-bake.hcl hands upstream's image in as
+# the `gallery-server` build context, so server/Dockerfile stays untouched and
+# fork-kit merges never conflict on it. See docs/custom-fork.md.
+#
+# Keep the machine-learning image in the deployment on the same release.
+
+# Built once per native CI architecture. Only the WASM and its manifest reach
+# the final image (no compiler or credentials).
+FROM node:24-trixie-slim@sha256:4d00acb4bcc42c454c4eb801526f7ad7f772ea3bd4fd168c5cc2e384abcbb9d4 AS geofence-build
+ARG TARGETARCH
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl binaryen \
+    && rm -rf /var/lib/apt/lists/*
+RUN set -eu; \
+    case "${TARGETARCH:-$(dpkg --print-architecture)}" in \
+      arm64) arch=aarch64; checksum=025f4050b199d68413c159bde1187271ae270021a9f7171e7beb509922821f2a ;; \
+      amd64) arch=x86_64; checksum=63b72da2f5e88655522dc21477de549f238a2f40546a69ce4e0fce7e78654035 ;; \
+      *) echo "Unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/extism/js-pdk/releases/download/v1.7.0/extism-js-${arch}-linux-v1.7.0.gz" -o /tmp/extism.gz; \
+    echo "$checksum  /tmp/extism.gz" | sha256sum -c -; \
+    gunzip -c /tmp/extism.gz > /usr/local/bin/extism-js; chmod +x /usr/local/bin/extism-js
+WORKDIR /plugin
+COPY noodle/plugins/geofence/package*.json ./
+RUN npm ci --ignore-scripts
+COPY noodle/plugins/geofence/ ./
+RUN npm test && npm run build && extism-js dist/index.js -i dist/index.d.ts -o dist/plugin.wasm && npm run test:wasm
+
+FROM gallery-server
+
+# IMMICH_PLUGINS_INSTALL_FOLDER=/opt/noodle-plugins in the deployment.
+COPY --from=geofence-build /plugin/manifest.json /opt/noodle-plugins/geofence/manifest.json
+COPY --from=geofence-build /plugin/dist/plugin.wasm /opt/noodle-plugins/geofence/dist/plugin.wasm
