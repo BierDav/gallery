@@ -9,6 +9,7 @@ import {
   QueueMaintenanceRepository,
   buildWorkerOptions,
 } from 'src/gallery/repositories/queue-maintenance.repository.js';
+import { splitLocalFileDeletes } from 'src/noodle/local-file-delete.js';
 import { ConfigRepository } from 'src/repositories/config.repository.js';
 import { EventRepository } from 'src/repositories/event.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
@@ -205,7 +206,19 @@ export class JobRepository {
 
     const promises = [];
     const itemsByQueue = {} as Record<string, (JobItem & { data: any; options: JobsOptions | undefined })[]>;
-    for (const item of items) {
+    for (let item of items) {
+      // Noodle: unlink pod-local scratch files here; queue only the S3 keys.
+      if (item.name === JobName.FileDelete && Array.isArray(item.data?.files)) {
+        const { unlinks, remote } = splitLocalFileDeletes(item.data.files, (path, error) =>
+          this.logger.warn(`Failed to unlink local scratch file ${path}: ${error}`),
+        );
+        promises.push(...unlinks);
+        if (remote.length === 0) {
+          continue;
+        }
+        item = { ...item, data: { ...item.data, files: remote } };
+      }
+
       const queueName = this.getQueueName(item.name);
       const job = {
         name: item.name,
