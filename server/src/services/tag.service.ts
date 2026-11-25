@@ -14,6 +14,7 @@ import {
 } from 'src/dtos/tag.dto.js';
 import { JobName, JobStatus, Permission, QueueName } from 'src/enum.js';
 import { checkAssetEditAccess } from 'src/gallery/utils/access-grants.js';
+import { syncNearbyAlbumNotes } from 'src/noodle/geofence/hooks.js';
 import { TagAssetTable } from 'src/schema/tables/tag-asset.table.js';
 import { BaseService } from 'src/services/base.service.js';
 import { addAssets, removeAssets } from 'src/utils/asset.util.js';
@@ -185,3 +186,7 @@ export class TagService extends BaseService {
     await this.jobRepository.queueAll(assetIds.map((id) => ({ name: JobName.SidecarWrite, data: { id } })));
   }
 }
+
+// Noodle: keep nearby-album source tags and image notes in step with these edits.
+// eslint-disable-next-line unicorn/no-top-level-side-effects
+syncNearbyAlbumNotes(TagService, 'tag', ['addAssets', 'removeAssets', 'bulkTagAssets', 'update', 'remove']);

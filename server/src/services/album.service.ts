@@ -25,6 +25,7 @@ import {
   removeAlbumAssetContributions,
   tryContributeDeniedAssets,
 } from 'src/gallery/utils/space-album-contribution.js';
+import { syncNearbyAlbumNotes } from 'src/noodle/geofence/hooks.js';
 import { AlbumAssetCount } from 'src/repositories/album.repository.js';
 import { BaseService } from 'src/services/base.service.js';
 import { addAssets, removeAssets } from 'src/utils/asset.util.js';
@@ -460,3 +461,14 @@ export class AlbumService extends BaseService {
     return { ...mapAlbum(album, { auth }), ...mapAlbumMetadata(metadata) };
   }
 }
+
+// Noodle: keep nearby-album source tags and image notes in step with these edits.
+// eslint-disable-next-line unicorn/no-top-level-side-effects
+syncNearbyAlbumNotes(AlbumService, 'album', [
+  'create',
+  'addAssets',
+  'addAssetsToAlbums',
+  'removeAssets',
+  'update',
+  'delete',
+]);

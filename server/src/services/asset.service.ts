@@ -42,6 +42,7 @@ import { requireAssetEditAccess } from 'src/gallery/utils/access-grants.js';
 import { applyAssetResponseOverlay } from 'src/gallery/utils/asset-response-overlay.js';
 import { afterAssetUpdate, beforeAssetUpdate, beforeAssetUpdateAll } from 'src/gallery/utils/asset-update-hooks.js';
 import { logCrossOwnerEdit } from 'src/gallery/utils/cross-owner-edit.js';
+import { syncNearbyAlbumNotes } from 'src/noodle/geofence/hooks.js';
 import { BaseService } from 'src/services/base.service.js';
 import type { JobItem, JobOf } from 'src/types.js';
 import { requireElevatedPermission } from 'src/utils/access.js';
@@ -745,3 +746,7 @@ export class AssetService extends BaseService {
     await logCrossOwnerEdit(this.accessRepository, this.sharedSpaceRepository, this.logger, auth, [id]);
   }
 }
+
+// Noodle: keep nearby-album source tags and image notes in step with these edits.
+// eslint-disable-next-line unicorn/no-top-level-side-effects
+syncNearbyAlbumNotes(AssetService, 'asset', ['update', 'updateAll']);
