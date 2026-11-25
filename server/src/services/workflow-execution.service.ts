@@ -25,6 +25,7 @@ import {
   WorkflowResult,
   WorkflowType,
 } from 'src/enum.js';
+import { NotesService, synchronizeAfterMetadata } from 'src/noodle/geofence/source-notes.js';
 import type { ArgOf } from 'src/repositories/event.repository.js';
 import { AlbumService } from 'src/services/album.service.js';
 import { AssetService } from 'src/services/asset.service.js';
@@ -308,14 +309,21 @@ export class WorkflowExecutionService extends BaseService {
   }
 
   @OnEvent({ name: 'AssetMetadataExtracted' })
-  onAssetMetadataExtracted({ userId, assetId, source }: ArgOf<'AssetMetadataExtracted'>) {
+  async onAssetMetadataExtracted({ userId, assetId, source }: ArgOf<'AssetMetadataExtracted'>) {
     // prevent loops
     // TODO loop detection in job service directly
     if (source === 'sidecar-write') {
       return;
     }
 
-    return this.onAssetTrigger({ userId, assetId, trigger: WorkflowTrigger.AssetMetadataExtraction });
+    const result = await this.onAssetTrigger({ userId, assetId, trigger: WorkflowTrigger.AssetMetadataExtraction });
+    // Noodle: a nearby-album source image's note depends on its location, which may only now be known.
+    try {
+      await synchronizeAfterMetadata(this as unknown as NotesService, userId, assetId);
+    } catch {
+      this.logger.warn('Could not refresh nearby source image note after metadata extraction');
+    }
+    return result;
   }
 
   @OnEvent({ name: 'AssetOcrExtracted' })
