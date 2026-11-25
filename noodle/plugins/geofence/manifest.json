@@ -1,0 +1,54 @@
+{
+  "name": "noodle-geofence",
+  "version": "1.2.1",
+  "title": "Nearby albums",
+  "description": "New images within 250 metres of manually added images in albums starting with !.",
+  "author": "Noodle Gallery",
+  "wasmPath": "dist/plugin.wasm",
+  "methods": [
+    {
+      "name": "sortUpload",
+      "title": "Add to nearby ! albums",
+      "description": "Uses album-specific Standortquelle tags for 250 m sources; no backfill.",
+      "types": [
+        "AssetV1"
+      ],
+      "hostFunctions": true,
+      "allowedHosts": [
+        "^photos.quickme.at$"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "apiUrl",
+          "apiKey",
+          "ownerId",
+          "enabledAfter"
+        ],
+        "properties": {
+          "apiUrl": {
+            "type": "string",
+            "title": "API URL",
+            "description": "Must be https://photos.quickme.at/api"
+          },
+          "apiKey": {
+            "type": "string",
+            "title": "API key",
+            "description": "Stored in workflow config; do not share workflow exports."
+          },
+          "ownerId": {
+            "type": "string",
+            "title": "Account ID",
+            "description": "Only process this account and its owned albums."
+          },
+          "enabledAfter": {
+            "type": "string",
+            "title": "Enable after",
+            "description": "ISO UTC timestamp; never move backwards. Older uploads are excluded."
+          }
+        }
+      }
+    }
+  ],
+  "templates": []
+}

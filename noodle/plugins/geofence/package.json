@@ -1,0 +1,14 @@
+{
+  "name": "noodle-geofence",
+  "version": "1.2.1",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.cjs",
+    "build": "node build.cjs",
+    "test:wasm": "node test/wasm.cjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "@extism/extism": "2.0.0-rc13"
+  }
+}
