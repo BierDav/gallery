@@ -7,7 +7,7 @@ import { page, userEvent } from 'vitest/browser';
 import Page from './+page.svelte';
 import { load } from './+page.ts';
 
-test('shows the album date range', async ({ data, router, render }) => {
+test('shows the album date range', async ({ data, router, render, settle }) => {
   const assets = [
     factory.asset({ fileCreatedAt: '2026-06-20T12:00:00.000Z' }),
     factory.asset({ fileCreatedAt: '2026-06-10T12:00:00.000Z' }),
@@ -18,6 +18,8 @@ test('shows the album date range', async ({ data, router, render }) => {
   await router.goto(Route.viewAlbum(album), { albumId: album.id });
 
   await render(Page, load);
+  // Noodle: a private album loads its activity too; let that finish first.
+  await settle();
 
   await expect.element(page.getByText('Jun 10 – 20, 2026', { exact: true })).toBeVisible();
 });
@@ -27,6 +29,8 @@ test('owner saves a new description when leaving the field', async ({ data, rout
   data.addAlbums(album);
   await router.goto(Route.viewAlbum(album), { albumId: album.id });
   await render(Page, load);
+  // Noodle: a private album loads its activity too; let that finish first.
+  await settle();
 
   await app.album.descriptionInput.fill('A week in the mountains');
   await userEvent.keyboard('{Control>}{Enter}{/Control}');

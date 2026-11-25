@@ -95,8 +95,14 @@ paths = [
   "web/src/routes/(user)/albums/[albumId=id]/[[photos=photos]]/[[assetId=id]]/+page.svelte",
   "web/src/lib/noodle/album-activity.ts",
   "web/src/lib/noodle/album-activity.spec.ts",
+  "web/src/routes/(user)/albums/[albumId=id]/[[photos=photos]]/[[assetId=id]]/page.spec.ts",
+  "web/src/routes/(user)/albums/[albumId=id]/[[photos=photos]]/[[assetId=id]]/page.route.spec.ts",
 ]
-tests = ["web/src/lib/noodle/album-activity.spec.ts"]
+tests = [
+  "web/src/lib/noodle/album-activity.spec.ts",
+  "web/src/routes/(user)/albums/[albumId=id]/[[photos=photos]]/[[assetId=id]]/page.spec.ts",
+  "web/src/routes/(user)/albums/[albumId=id]/[[photos=photos]]/[[assetId=id]]/page.route.spec.ts",
+]
 
 [[patch]]
 id = "spellcheck-focus"

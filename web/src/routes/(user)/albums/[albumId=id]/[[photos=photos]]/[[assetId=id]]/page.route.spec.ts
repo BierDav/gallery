@@ -133,6 +133,9 @@ function renderPage(album = factory.album({ assetCount: 2 })) {
   });
 
   sdkMock.getSearchSuggestions.mockImplementation((() => Promise.resolve([] as string[])) as never);
+  // Noodle: every album has comments and likes, so the page loads its activity.
+  sdkMock.getActivities.mockResolvedValue([]);
+  sdkMock.getActivityStatistics.mockResolvedValue({ comments: 0, likes: 0 });
 
   // The page reads its album from getAlbumInfoQuery (immich-32668), which +page.ts preloads.
   queryClient.setQueryData(getAlbumInfoQuery(album.id).queryKey, album);
