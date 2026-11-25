@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Readable } from 'node:stream';
 import { vitest } from 'vitest';
 import { DownloadResponseDto } from 'src/dtos/download.dto.js';
-import { AssetType, SharedSpaceRole } from 'src/enum.js';
+import { AssetType, SharedSpaceRole, UserMetadataKey } from 'src/enum.js';
 import { DownloadService } from 'src/services/download.service.js';
 import { StorageService } from 'src/services/storage.service.js';
 import { AssetFactory } from 'test/factories/asset.factory.js';
@@ -738,7 +738,9 @@ describe(DownloadService.name, () => {
       const assetIds = ['asset-1', 'asset-2'];
 
       mocks.access.asset.checkOwnerAccess.mockResolvedValue(new Set(assetIds));
-      mocks.user.getMetadata.mockResolvedValue([]);
+      mocks.user.getMetadata.mockResolvedValue([
+        { key: UserMetadataKey.Preferences, value: { download: { includeEmbeddedVideos: true } } },
+      ]);
       mocks.downloadRepository.downloadAssetIds.mockReturnValue(
         makeStream([
           { id: 'asset-1', livePhotoVideoId: 'asset-3', size: 5000 },
@@ -758,6 +760,31 @@ describe(DownloadService.name, () => {
           { assetIds: ['asset-1', 'asset-2'], size: 105_000 },
           { assetIds: ['asset-3', 'asset-4'], size: 146_456 },
         ],
+      });
+    });
+
+    it('should leave out every video portion of a live photo unless embedded videos are included', async () => {
+      const assetIds = ['asset-1', 'asset-2'];
+
+      mocks.access.asset.checkOwnerAccess.mockResolvedValue(new Set(assetIds));
+      mocks.user.getMetadata.mockResolvedValue([]);
+      mocks.downloadRepository.downloadAssetIds.mockReturnValue(
+        makeStream([
+          { id: 'asset-1', livePhotoVideoId: 'asset-3', size: 5000 },
+          { id: 'asset-2', livePhotoVideoId: 'asset-4', size: 100_000 },
+        ]),
+      );
+      mocks.downloadRepository.downloadMotionAssetIds.mockReturnValue(
+        makeStream([
+          // An Android motion photo's extracted video (an S3 key) and an uploaded iOS .MOV.
+          { id: 'asset-3', livePhotoVideoId: null, size: 23_456, originalPath: 'encoded-video/user/ab/cd/a-MP.mp4' },
+          { id: 'asset-4', livePhotoVideoId: null, size: 123_000, originalPath: 'library/user/IMG_0001.MOV' },
+        ]),
+      );
+
+      await expect(sut.getDownloadInfo(authStub.admin, { assetIds, archiveSize: 30_000 })).resolves.toEqual({
+        totalSize: 105_000,
+        archives: [{ assetIds: ['asset-1', 'asset-2'], size: 105_000 }],
       });
     });
 
@@ -805,7 +832,9 @@ describe(DownloadService.name, () => {
     it('should include live photo video for space download', async () => {
       const spaceId = newUuid();
 
-      mocks.user.getMetadata.mockResolvedValue([]);
+      mocks.user.getMetadata.mockResolvedValue([
+        { key: UserMetadataKey.Preferences, value: { download: { includeEmbeddedVideos: true } } },
+      ]);
       mocks.access.sharedSpace.checkMemberAccess.mockResolvedValue(new Set([spaceId]));
       mocks.downloadRepository.downloadSpaceId.mockReturnValue(
         makeStream([{ id: 'asset-1', livePhotoVideoId: 'motion-1', size: 5000 }]),

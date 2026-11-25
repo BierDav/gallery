@@ -2,7 +2,6 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Readable } from 'node:stream';
 import sanitize from 'sanitize-filename';
 import { isDiskPath } from 'src/backends/disk-storage.backend.js';
-import { StorageCore } from 'src/cores/storage.core.js';
 import { isEditedOnly, type AuthDto } from 'src/dtos/auth.dto.js';
 import {
   DownloadArchiveDto,
@@ -133,7 +132,10 @@ export class DownloadService extends BaseService {
     if (motionIds.size > 0) {
       const motionAssets = this.downloadRepository.downloadMotionAssetIds([...motionIds]);
       for await (const motionAsset of motionAssets) {
-        if (StorageCore.isAndroidMotionPath(motionAsset.originalPath) && !preferences.download.includeEmbeddedVideos) {
+        // Noodle: honour "include embedded videos" for every motion part. isAndroidMotionPath()
+        // misses separately uploaded parts (Takeout HEIC+MP4, iOS live-photo .MOV), which
+        // upstream always adds to the zip regardless of the setting.
+        if (!preferences.download.includeEmbeddedVideos) {
           continue;
         }
 
