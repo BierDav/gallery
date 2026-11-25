@@ -18,6 +18,7 @@ import { PassThrough, Readable, Writable } from 'node:stream';
 import { createGunzip, createGzip } from 'node:zlib';
 import picomatch from 'picomatch';
 import { CrawlOptionsDto, WalkOptionsDto } from 'src/dtos/library.dto.js';
+import { dfDiskUsage, isImplausibleStatfs } from 'src/noodle/disk-usage.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { mimeTypes } from 'src/utils/mime-types.js';
 
@@ -262,6 +263,13 @@ export class StorageRepository {
 
   async checkDiskUsage(folder: string): Promise<DiskUsage> {
     const stats = await fs.statfs(folder);
+    // Noodle: virtiofs/FUSE can report a bogus statfs block size; ask df instead.
+    if (isImplausibleStatfs(stats)) {
+      const usage = await dfDiskUsage(folder);
+      if (usage) {
+        return usage;
+      }
+    }
     return {
       available: stats.bavail * stats.frsize,
       free: stats.bfree * stats.frsize,
