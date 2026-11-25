@@ -28,8 +28,14 @@ export function getLivePhotoMotionFilename(stillName: string, motionName: string
 
 export type ContentDisposition = 'inline' | 'attachment';
 
+// RFC 8187 attr-chars exclude ! ' ( ) *, which encodeURIComponent leaves raw. With
+// IMMICH_S3_SERVE_MODE=redirect this value becomes response-content-disposition, and
+// Backblaze B2 rejects a raw paren with 400 (e.g. Android's `NAME(0).jpg`).
+const encodeRfc8187 = (value: string) =>
+  encodeURIComponent(value).replaceAll(/[!'()*]/g, (char) => '%' + char.codePointAt(0)!.toString(16).toUpperCase());
+
 export const getContentDispositionHeader = (disposition: ContentDisposition, fileName: string): string => {
-  return `${disposition}; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+  return `${disposition}; filename*=UTF-8''${encodeRfc8187(fileName)}`;
 };
 
 export class ImmichFileResponse {
