@@ -40,6 +40,7 @@
   import { registerAlbumContext } from '#lib/managers/command-context-manager.svelte.ts';
   import { TimelineManager } from '#lib/managers/timeline-manager/timeline-manager.svelte.ts';
   import type { TimelineAsset } from '#lib/managers/timeline-manager/types.ts';
+  import { hasAlbumActivity } from '#lib/noodle/album-activity.ts';
   import {
     deleteAlbumMutation,
     getAlbumInfoQuery,
@@ -276,7 +277,7 @@
     return filtered.options;
   });
 
-  const isShared = $derived(viewMode !== AlbumPageViewMode.SELECT_ASSETS && album.albumUsers.length > 1);
+  const isShared = $derived(viewMode !== AlbumPageViewMode.SELECT_ASSETS && hasAlbumActivity(album));
 
   $effect(() => {
     if (assetViewerManager.isViewing || !isShared) {
@@ -291,7 +292,7 @@
   const isOwned = $derived(isAlbumOwner(album));
 
   let showActivityStatus = $derived(
-    album.albumUsers.length > 1 &&
+    hasAlbumActivity(album) &&
       !assetViewerManager.isViewing &&
       (album.isActivityEnabled || activityManager.commentCount > 0),
   );
@@ -614,7 +615,7 @@
       {/if}
     {/if}
   </div>
-  {#if album.albumUsers.length > 1 && album && assetViewerManager.isShowActivityPanel && authManager.authenticated && !assetViewerManager.isViewing}
+  {#if hasAlbumActivity(album) && album && assetViewerManager.isShowActivityPanel && authManager.authenticated && !assetViewerManager.isViewing}
     <div class="flex">
       <div
         transition:fly={{ duration: 150 }}
