@@ -22,6 +22,7 @@ import {
 } from 'src/gallery/services/memory-rules/memory-type.metadata.js';
 import { isActiveDistanceThreshold } from 'src/gallery/utils/smart-search.js';
 import { spatialSceneServerFeatures } from 'src/gallery/utils/spatial-scene.js';
+import { bucketUsage, getStorageQuotaBytes } from 'src/noodle/s3-usage.js';
 import { UserStatsQueryResponse } from 'src/repositories/user.repository.js';
 import { BaseService } from 'src/services/base.service.js';
 import { asHumanReadable } from 'src/utils/bytes.js';
@@ -100,8 +101,7 @@ export class ServerService extends BaseService {
   }
 
   async getStorage(): Promise<ServerStorageResponseDto> {
-    const libraryBase = StorageCore.getBaseFolder(StorageFolder.Library);
-    const diskInfo = await this.storageRepository.checkDiskUsage(libraryBase);
+    const diskInfo = await this.getStorageUsage();
 
     const usagePercentage = (((diskInfo.total - diskInfo.free) / diskInfo.total) * 100).toFixed(2);
 
@@ -114,6 +114,20 @@ export class ServerService extends BaseService {
     serverInfo.diskUseRaw = diskInfo.total - diskInfo.free;
     serverInfo.diskUsagePercentage = Number(usagePercentage);
     return serverInfo;
+  }
+
+  // Noodle: with media in S3, report a fixed quota and the bucket's usage instead of
+  // the local runtime volume (see src/noodle/s3-usage.ts).
+  private async getStorageUsage() {
+    const quota = getStorageQuotaBytes();
+    if (quota > 0) {
+      const used = bucketUsage((error) => this.logger.warn(`Could not sum S3 bucket usage: ${error}`)).current();
+      // free may go negative over quota, so "used" and the percentage stay exact.
+      return { total: quota, free: quota - used, available: Math.max(0, quota - used) };
+    }
+
+    const libraryBase = StorageCore.getBaseFolder(StorageFolder.Library);
+    return this.storageRepository.checkDiskUsage(libraryBase);
   }
 
   ping(): ServerPingResponse {
