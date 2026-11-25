@@ -1,0 +1,124 @@
+# fork-kit (https://github.com/BierDav/fork-kit) keeps this fork merged with
+# open-noodle/gallery's latest release through one sync pull request, opened by
+# the central fork-kit workflow. See docs/custom-fork.md.
+
+[upstream]
+url = "https://github.com/open-noodle/gallery.git"
+# The latest GitHub release, which excludes the -rc prereleases.
+track = "release"
+
+[fork]
+branch = "patched"
+
+[ledger]
+ignore = [".github/**", ".fork-kit.toml", "docs/custom-fork.md"]
+
+# Tests are vitest specs (server: `cd server && pnpm exec vitest --config
+# test/vitest.config.mjs run <spec>`; web: `cd web && pnpm exec vitest run <spec>`).
+
+[[patch]]
+id = "disk-usage"
+summary = "Storage meter: fall back to df when statfs reports an implausible block size (virtiofs/FUSE)"
+paths = [
+  "server/src/repositories/storage.repository.ts",
+  "server/src/noodle/disk-usage.ts",
+  "server/src/noodle/disk-usage.spec.ts",
+]
+tests = ["server/src/noodle/disk-usage.spec.ts"]
+
+[[patch]]
+id = "storage-quota"
+summary = "Server storage: report IMMICH_STORAGE_QUOTA_BYTES and the S3 bucket's usage instead of the local disk"
+paths = [
+  "server/src/services/server.service.ts",
+  "server/src/noodle/s3-usage.ts",
+  "server/src/noodle/s3-usage.spec.ts",
+  "server/src/noodle/server-storage-quota.spec.ts",
+]
+tests = ["server/src/noodle/s3-usage.spec.ts", "server/src/noodle/server-storage-quota.spec.ts"]
+
+[[patch]]
+id = "content-disposition"
+summary = "Percent-encode ! ' ( ) * in Content-Disposition filename* (Backblaze B2 rejects raw parens on redirect downloads)"
+paths = ["server/src/utils/file.ts", "server/src/noodle/content-disposition.spec.ts"]
+tests = ["server/src/noodle/content-disposition.spec.ts", "server/src/utils/file.spec.ts"]
+
+[[patch]]
+id = "motion-download"
+summary = "Downloads: \"include embedded videos\" decides for every motion part, not only Android motion photos"
+paths = ["server/src/services/download.service.ts", "server/src/services/download.service.spec.ts"]
+tests = ["server/src/services/download.service.spec.ts"]
+
+[[patch]]
+id = "plugin-upgrades"
+summary = "Upgrade a plugin in place on its unique name, keeping plugin, method and workflow IDs"
+paths = ["server/src/repositories/plugin.repository.ts", "server/src/noodle/plugin-upgrade.spec.ts"]
+tests = ["server/src/noodle/plugin-upgrade.spec.ts"]
+
+[[patch]]
+id = "local-file-delete"
+summary = "Unlink pod-local scratch files where FileDelete is queued; queue only S3 keys (no shared RWX volume needed)"
+paths = [
+  "server/src/repositories/job.repository.ts",
+  "server/src/noodle/local-file-delete.ts",
+  "server/src/noodle/local-file-delete.spec.ts",
+]
+tests = ["server/src/noodle/local-file-delete.spec.ts", "server/src/repositories/job.repository.spec.ts"]
+
+[[patch]]
+id = "geofence-notes"
+summary = "Nearby albums: album, tag and asset edits keep Standortquelle tags and the German image notes in step"
+paths = [
+  "server/src/noodle/geofence/**",
+  "server/src/services/album.service.ts",
+  "server/src/services/tag.service.ts",
+  "server/src/services/asset.service.ts",
+]
+tests = ["server/src/noodle/geofence/source-notes.spec.ts", "server/src/noodle/geofence/hooks.spec.ts"]
+
+[[patch]]
+id = "geofence-metadata"
+summary = "Nearby albums: refresh a source image's note after metadata extraction"
+paths = ["server/src/services/workflow-execution.service.ts"]
+tests = ["server/src/noodle/geofence/source-notes.spec.ts"]
+
+[[patch]]
+id = "geofence-plugin"
+summary = "The noodle-geofence WASM workflow plugin, built into the image under /opt/noodle-plugins"
+paths = ["noodle/plugins/geofence/**"]
+tests = ["noodle/plugins/geofence/test/core.test.cjs", "noodle/plugins/geofence/test/wasm.cjs"]
+
+[[patch]]
+id = "album-activity"
+summary = "Comments and likes on every album, not only albums shared with another user"
+paths = [
+  "web/src/routes/(user)/albums/[albumId=id]/[[photos=photos]]/[[assetId=id]]/+page.svelte",
+  "web/src/lib/noodle/album-activity.ts",
+  "web/src/lib/noodle/album-activity.spec.ts",
+]
+tests = ["web/src/lib/noodle/album-activity.spec.ts"]
+
+[[patch]]
+id = "spellcheck-focus"
+summary = "Spellcheck album title and description only while they are being edited"
+paths = ["web/src/lib/noodle/spellcheck-focus.ts", "web/src/lib/noodle/spellcheck-focus.spec.ts"]
+tests = ["web/src/lib/noodle/spellcheck-focus.spec.ts"]
+
+[[patch]]
+id = "branding"
+summary = "Noodle Gallery branding: favicons, wordmark, mark and loader, coral accent, Google Sans fonts, top-bar and sidebar tweaks"
+paths = [
+  "web/src/lib/noodle/brand/**",
+  "web/src/routes/+layout.svelte",
+  "web/static/apple-icon-180.png",
+  "web/static/favicon*",
+  "web/static/gallery-loader*.svg",
+  "web/static/gallery-logo-inline-*.svg",
+  "web/static/gallery-logo-mark*.svg",
+  "noodle/brand/**",
+]
+
+[[patch]]
+id = "container-build"
+summary = "Multi-architecture image ghcr.io/bierdav/gallery-server: upstream's server/Dockerfile plus Dockerfile.custom"
+paths = ["Dockerfile.custom", "docker-bake.hcl"]

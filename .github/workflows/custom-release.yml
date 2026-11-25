@@ -1,0 +1,301 @@
+# Builds the Noodle Gallery server image from `patched`: upstream's own
+# server/Dockerfile from this branch's source plus Dockerfile.custom (the
+# nearby-albums plugin), natively on amd64 and arm64, and publishes it as
+# ghcr.io/bierdav/gallery-server:<release>-custom.<n>. Pull requests into
+# `patched` (fork-kit's sync PR included) run the same tests, build and smoke
+# test, and publish nothing. See docs/custom-fork.md.
+#
+# Required checks on `patched`: test-server, test-web, build (amd64), build (arm64).
+name: Custom release
+
+on:
+  push:
+    branches: [patched]
+  pull_request:
+    branches: [patched]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: custom-release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/bierdav/gallery-server
+  UPSTREAM: https://github.com/open-noodle/gallery.git
+
+jobs:
+  test-server:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install
+        run: |
+          pnpm --filter immich --filter @immich/sdk --filter @immich/plugin-sdk install --frozen-lockfile
+          pnpm --filter @immich/sdk build
+          pnpm --filter @immich/plugin-sdk build
+      - name: Typecheck and lint
+        working-directory: server
+        run: |
+          pnpm run check
+          pnpm run lint
+      # Upstream's whole unit suite, which includes the fork's patch tests
+      # (server/src/noodle and the specs listed in .fork-kit.toml).
+      - name: Unit tests
+        working-directory: server
+        run: pnpm exec vitest --config test/vitest.config.mjs run
+      - name: Nearby-albums plugin tests
+        working-directory: noodle/plugins/geofence
+        run: |
+          npm ci --ignore-scripts
+          npm test
+
+  test-web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install
+        env:
+          SHARP_IGNORE_GLOBAL_LIBVIPS: "true"
+        run: |
+          pnpm --filter immich-web --filter @immich/sdk install --frozen-lockfile
+          pnpm --filter @immich/sdk build
+      - name: Typecheck and lint
+        working-directory: web
+        run: |
+          pnpm exec svelte-kit sync
+          pnpm run check:svelte
+          pnpm run check:typescript
+          pnpm run lint
+      - name: Unit tests
+        working-directory: web
+        run: |
+          pnpm exec playwright install --with-deps chromium --only-shell
+          pnpm exec vitest run
+
+  build:
+    name: build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Server and web build, the layer cache and the loaded image do not fit
+      # the runner's free disk otherwise (upstream's e2e job does the same).
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h /
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          source: .
+          targets: custom
+          load: true
+          set: |
+            *.platform=linux/${{ matrix.arch }}
+            upstream.cache-from=type=gha,scope=upstream-${{ matrix.arch }}
+            upstream.cache-to=type=gha,mode=max,scope=upstream-${{ matrix.arch }}
+            custom.cache-from=type=gha,scope=custom-${{ matrix.arch }}
+            custom.cache-to=type=gha,mode=max,scope=custom-${{ matrix.arch }}
+            custom.tags=${{ env.IMAGE }}:build
+            custom.labels.org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            custom.labels.org.opencontainers.image.revision=${{ github.sha }}
+
+      # Start the image against a real database and check the fork's behaviour
+      # end to end: server up, plugin loaded, branding served.
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          docker network create smoke
+          docker run -d --name database --network smoke \
+            -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=immich \
+            -e POSTGRES_INITDB_ARGS=--data-checksums \
+            ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23
+          docker run -d --name redis --network smoke \
+            docker.io/valkey/valkey:9@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd
+          docker run -d --name server --network smoke -p 2283:2283 \
+            -e DB_HOSTNAME=database -e DB_USERNAME=postgres -e DB_PASSWORD=postgres -e DB_DATABASE_NAME=immich \
+            -e REDIS_HOSTNAME=redis \
+            -e IMMICH_ALLOW_EXTERNAL_PLUGINS=true -e IMMICH_PLUGINS_INSTALL_FOLDER=/opt/noodle-plugins \
+            "$IMAGE:build"
+
+          trap 'docker logs server 2>&1 | tail -n 200' EXIT
+          for _ in $(seq 1 90); do
+            if curl -fsS http://localhost:2283/api/server/ping 2>/dev/null | grep -q pong; then break; fi
+            if [ "$(docker inspect -f '{{.State.Running}}' server)" != true ]; then echo "::error::The server exited."; exit 1; fi
+            sleep 5
+          done
+          curl -fsS http://localhost:2283/api/server/ping | grep -q pong
+
+          api() { curl -fsS -H 'Content-Type: application/json' "$@"; }
+          api -X POST http://localhost:2283/api/auth/admin-sign-up \
+            -d '{"email":"smoke@example.com","password":"smoke-test-password","name":"Smoke"}' >/dev/null
+          token=$(api -X POST http://localhost:2283/api/auth/login \
+            -d '{"email":"smoke@example.com","password":"smoke-test-password"}' | jq -r .accessToken)
+          auth=(-H "Authorization: Bearer $token")
+
+          # The nearby-albums plugin is installed from /opt/noodle-plugins.
+          api "${auth[@]}" http://localhost:2283/api/plugins \
+            | jq -e 'any(.[]; .name == "noodle-geofence" and any(.methods[]; .key == "noodle-geofence#sortUpload"))'
+          api "${auth[@]}" http://localhost:2283/api/server/storage | jq -e '.diskSizeRaw > 0'
+
+          # The web app is the branded build.
+          curl -fsS http://localhost:2283/ | grep -q '<html'
+          for file in gallery-logo-inline-light.svg gallery-logo-mark.svg favicon-32.png favicon.ico; do
+            curl -fsS -o "/tmp/$file" "http://localhost:2283/$file"
+            cmp "/tmp/$file" "web/static/$file"
+          done
+          trap - EXIT
+          echo "Smoke test passed."
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      # Same build session, so this comes straight from the builder's cache.
+      - name: Push by digest
+        if: github.event_name != 'pull_request'
+        id: push
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          source: .
+          targets: custom
+          set: |
+            *.platform=linux/${{ matrix.arch }}
+            upstream.cache-from=type=gha,scope=upstream-${{ matrix.arch }}
+            custom.cache-from=type=gha,scope=custom-${{ matrix.arch }}
+            custom.tags=${{ env.IMAGE }}
+            custom.labels.org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            custom.labels.org.opencontainers.image.revision=${{ github.sha }}
+            custom.output=type=image,push-by-digest=true,name-canonical=true,push=true
+      - name: Export digest
+        if: github.event_name != 'pull_request'
+        env:
+          METADATA: ${{ steps.push.outputs.metadata }}
+        run: |
+          set -euo pipefail
+          digest=$(jq -r '.custom["containerimage.digest"]' <<<"$METADATA")
+          [[ "$digest" == sha256:* ]] || { echo "::error::No digest in the bake metadata."; exit 1; }
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${digest#sha256:}"
+      - name: Upload digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: [test-server, test-web, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - name: Find the upstream release and the next tag
+        id: release
+        run: |
+          set -euo pipefail
+          git fetch -q --no-tags "$UPSTREAM" '+refs/tags/v*:refs/tags/v*'
+          upstream=$(git tag --merged HEAD --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)
+          [[ -n "$upstream" ]] || { echo "::error::No upstream release is merged into HEAD."; exit 1; }
+          version=${upstream#v}
+          n=0
+          for tag in $(git tag -l "$version-custom.*"); do
+            m=${tag##*-custom.}
+            [[ "$m" =~ ^[0-9]+$ ]] && (( m > n )) && n=$m
+          done
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          echo "tag=$version-custom.$((n + 1))" >> "$GITHUB_OUTPUT"
+          echo "Upstream release $upstream, next tag $version-custom.$((n + 1))"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Publish the multi-arch image
+        id: manifest
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          refs=()
+          for f in "$RUNNER_TEMP"/digests/*; do refs+=("$IMAGE@sha256:$(basename "$f")"); done
+          [[ ${#refs[@]} -eq 2 ]] || { echo "::error::Expected two architectures, got ${#refs[@]}."; exit 1; }
+          docker buildx imagetools create -t "$IMAGE:$TAG" -t "$IMAGE:sha-${GITHUB_SHA::12}" -t "$IMAGE:latest" "${refs[@]}"
+          digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$IMAGE:$TAG" | jq -r .digest)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Published \`$IMAGE:$TAG@$digest\`" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          UPSTREAM_TAG: ${{ steps.release.outputs.upstream }}
+          DIGEST: ${{ steps.manifest.outputs.digest }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            git tag "$TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$TAG"
+          fi
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            notes=$(printf 'Noodle Gallery server on upstream `%s` with the patches in `.fork-kit.toml`.\n\n**Image**\n```text\n%s:%s@%s\n```\n' \
+              "$UPSTREAM_TAG" "$IMAGE" "$TAG" "$DIGEST")
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes "$notes" --latest
+          fi
