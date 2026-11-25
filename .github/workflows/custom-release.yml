@@ -46,9 +46,15 @@ jobs:
           pnpm --filter @immich/plugin-sdk build
       - name: Typecheck and lint
         working-directory: server
+        # Lint the fork's own files: upstream's whole-tree run exceeds the runner's heap.
         run: |
           pnpm run check
-          pnpm run lint
+          pnpm exec eslint --max-warnings 0 src/noodle \
+            src/repositories/job.repository.ts src/repositories/plugin.repository.ts \
+            src/repositories/storage.repository.ts src/services/album.service.ts \
+            src/services/asset.service.ts src/services/download.service.ts \
+            src/services/download.service.spec.ts src/services/server.service.ts \
+            src/services/tag.service.ts src/services/workflow-execution.service.ts src/utils/file.ts
       # Upstream's whole unit suite, which includes the fork's patch tests
       # (server/src/noodle and the specs listed in .fork-kit.toml).
       - name: Unit tests
@@ -84,7 +90,10 @@ jobs:
           pnpm exec svelte-kit sync
           pnpm run check:svelte
           pnpm run check:typescript
-          pnpm run lint
+          # The fork's own files: upstream's whole-tree run (--concurrency 4) crashes
+          # svelte-eslint-parser on unrelated upstream components.
+          pnpm exec eslint --max-warnings 0 src/lib/noodle src/routes/+layout.svelte \
+            'src/routes/(user)/albums/[albumId=id]/[[photos=photos]]/[[assetId=id]]/+page.svelte'
       - name: Unit tests
         working-directory: web
         run: |
@@ -169,9 +178,14 @@ jobs:
             -d '{"email":"smoke@example.com","password":"smoke-test-password"}' | jq -r .accessToken)
           auth=(-H "Authorization: Bearer $token")
 
-          # The nearby-albums plugin is installed from /opt/noodle-plugins.
-          api "${auth[@]}" http://localhost:2283/api/plugins \
-            | jq -e 'any(.[]; .name == "noodle-geofence" and any(.methods[]; .key == "noodle-geofence#sortUpload"))'
+          # The nearby-albums plugin is installed from /opt/noodle-plugins. The
+          # microservices worker imports plugins after its geodata import, so wait.
+          installed='any(.[]; .name == "noodle-geofence" and any(.methods[]; .key == "noodle-geofence#sortUpload"))'
+          for _ in $(seq 1 60); do
+            if api "${auth[@]}" http://localhost:2283/api/plugins | jq -e "$installed" >/dev/null; then break; fi
+            sleep 5
+          done
+          api "${auth[@]}" http://localhost:2283/api/plugins | jq -e "$installed"
           api "${auth[@]}" http://localhost:2283/api/server/storage | jq -e '.diskSizeRaw > 0'
 
           # The web app is the branded build.
