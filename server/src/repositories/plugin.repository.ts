@@ -150,8 +150,11 @@ export class PluginRepository {
       const plugin = await tx
         .insertInto('plugin')
         .values(dto)
+        // Noodle: plugin_name_uq makes the name unique on its own, so a new version must
+        // update the existing row (keeping plugin, method and workflow IDs) instead of
+        // failing the insert on the name constraint.
         .onConflict((oc) =>
-          oc.columns(['name', 'version']).doUpdateSet((eb) => ({
+          oc.column('name').doUpdateSet((eb) => ({
             title: eb.ref('excluded.title'),
             description: eb.ref('excluded.description'),
             author: eb.ref('excluded.author'),
