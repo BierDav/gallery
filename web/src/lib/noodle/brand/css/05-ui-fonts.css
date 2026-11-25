@@ -1,0 +1,9 @@
+/* Route the UI's sans/mono families to Google Fonts (loaded by NoodleBrand.svelte).
+   Upstream sets these on `:root, :host`; !important makes the override win
+   regardless of source order / cascade layer. The shipped GoogleSans /
+   GoogleSansCode remain as offline fallbacks. */
+:root,
+:host {
+  --font-sans: 'Google Sans', 'GoogleSans', sans-serif !important;
+  --font-mono: 'Google Sans Code', 'GoogleSansCode', monospace !important;
+}

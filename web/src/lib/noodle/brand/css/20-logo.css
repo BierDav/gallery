@@ -1,0 +1,7 @@
+/* Top-bar "Noodle Gallery" wordmark <img>: fixed height + left spacing.
+   (The SVG art itself lives in web/static/gallery-logo-inline-*.svg.) */
+img[src*='logo-inline'] {
+  height: 24px !important;
+  width: auto !important;
+  margin-left: 8px !important;
+}

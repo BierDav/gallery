@@ -1,0 +1,17 @@
+/* Sidebar section labels. Scoped to nav#sidebar so nothing outside leaks.
+   The original label text is hidden (font-size:0) and replaced with "Other"
+   via ::before -- a sidebar-only rename that leaves the global i18n string
+   (and every other place "Library" appears) untouched. Also applies the
+   Google Sans Text / pl-4 styling. */
+#sidebar div[class~='ps-6'][class~='py-6'] > p[class~='text-xs'] {
+  padding-left: 1rem; /* pl-4 */
+  font-family: 'Google Sans Text', 'Google Sans', Roboto, Arial, sans-serif;
+  line-height: 1.25rem;
+  font-size: 0;
+  letter-spacing: 0em;
+  font-weight: 700;
+}
+#sidebar div[class~='ps-6'][class~='py-6'] > p[class~='text-xs']::before {
+  content: 'Other';
+  font-size: 0.875rem;
+}

@@ -1,0 +1,32 @@
+/* Top-bar right-side control cluster. Scoped to the <section> so identical
+   utility classes elsewhere are untouched.
+   Sizes: w-8=2rem(32px), w-9=2.25rem(36px), w-10=2.5rem(40px). */
+
+/* Always use the icon-only upload button: hide the full text one (rounded-xl),
+   force-show the icon one (which otherwise carries lg:hidden). */
+section[class~='justify-end'][class~='xl:w-auto'] button[class~='rounded-xl'] {
+  display: none !important;
+}
+section[class~='justify-end'][class~='xl:w-auto'] button[aria-label='Upload'] {
+  display: flex !important;
+}
+
+/* Notifications + icon upload: 40px -> 36px. */
+section[class~='justify-end'][class~='xl:w-auto'] button[aria-label='Upload'],
+section[class~='justify-end'][class~='xl:w-auto'] button[aria-label='Notifications'] {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+}
+
+/* Profile avatar: 40px -> 32px, and no border unless hovered (keeps the 2px
+   ring width so there is no layout shift on hover). Target the w-10 h-10 figure
+   specifically -- the account-info panel opens inside this same <section> and
+   also holds a profile-image figure (w-16 h-16), which must stay untouched. */
+section[class~='justify-end'][class~='xl:w-auto'] figure[class~='w-10'][class~='h-10'] {
+  width: 2rem !important;
+  height: 2rem !important;
+  border-color: transparent !important;
+}
+section[class~='justify-end'][class~='xl:w-auto'] figure[class~='w-10'][class~='h-10']:hover {
+  border-color: rgb(var(--immich-primary)) !important;
+}

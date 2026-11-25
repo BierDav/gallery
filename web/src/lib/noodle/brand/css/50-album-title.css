@@ -1,0 +1,55 @@
+/* __noodleAlbumTitleFont
+   Album title (expressive Google Sans Flex, Google Photos style).
+   The album detail page has TWO render paths for the title, from two different
+   components -- both must be styled or the branding only lands on some albums:
+     - editable (viewer may rename): a ghost Textarea primitive, which is a
+       textarea whose title is localized and carries `text-2xl lg:text-6xl`.
+       Match the class in the timeline header, independent of UI language.
+     - read-only (viewer may not rename, e.g. a shared album): a plain
+       <h1 class="text-2xl text-primary ... md:text-4xl lg:text-6xl"> inside the
+       album header <section>, nested in the timeline's top section.
+   The h1 is matched by its `lg:text-6xl` token, scoped to the timeline top
+   section, so ordinary headings elsewhere are untouched.
+   !important is required to beat the components' scoped styles (.svelte-*),
+   which outrank a plain attribute selector on specificity.
+   Spellcheck squiggles are handled separately in $lib/noodle/spellcheck-focus.ts (off
+   unless the field is focused, for the description textarea as well). */
+textarea[title='Edit Title'],
+section[data-testid='timeline-top-section'] textarea[class~='lg:text-6xl'],
+section[data-testid='timeline-top-section'] h1[class~='lg:text-6xl'] {
+  font-family: 'Google Sans Flex', 'Google Sans', Roboto, sans-serif !important;
+  font-variation-settings:
+    'ROND' 100,
+    'wdth' 25 !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  white-space: pre-wrap !important;
+  /* Headroom for uppercase diacritics (Ü, Ä, Å). Both paths hit `lg:text-6xl`,
+     and Tailwind's --text-6xl--line-height is 1 -- a line box exactly 1em tall.
+     In the editable path that actually crops the glyphs: the Textarea primitive
+     auto-sizes to scrollHeight and sets overflow:hidden, so the box IS the line
+     box and ink above it is clipped, not scrolled. The read-only <h1> overflows
+     visibly instead, so it collides with the date/count line beneath.
+     Measured on Google Sans Flex @ wght 800, wdth 25, ROND 100 (em, from the
+     baseline): ascent 0.9660, descent -0.2860 -> line-height:normal = 1.252.
+     Ink tops: Ü 0.9495, Å 0.9830 (tallest in the latin subset).
+     Line-box top = ascent + (lh - 1.252) / 2, so lh 1 puts it at 0.8400 and
+     crops Ü by ~0.11em (~6.6px at 3.75rem). Note `normal` is NOT enough
+     either: it tops out at 0.9660, still under Å's 0.9830, because this
+     font's ink overshoots its own declared ascender. 1.35 -> 1.0150, which
+     clears the tallest glyph with ~0.03em to spare. */
+  line-height: 1.35 !important;
+  /* Theme-aware foreground. --immich-ui-dark is upstream's body-text token:
+     #3d3d3d under `:root,.light`, #dbdbdb under `.dark`. A hardcoded #fff here
+     rendered the title white-on-white (invisible) in light mode. */
+  color: var(--immich-ui-dark, #dbdbdb) !important;
+}
+/* While editing: switch to plain Google Sans (regular weight, no expressive
+   axes, no uppercase) at the same size — so you see exactly what you type. */
+textarea[title='Edit Title']:focus,
+section[data-testid='timeline-top-section'] textarea[class~='lg:text-6xl']:focus {
+  font-family: 'Google Sans', 'GoogleSans', Roboto, sans-serif !important;
+  font-variation-settings: normal !important;
+  font-weight: 400 !important;
+  text-transform: none !important;
+}

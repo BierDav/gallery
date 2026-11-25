@@ -1,0 +1,42 @@
+/* Accent recolour: blue -> pastel red-orange (from the Noodle Gallery mark).
+   `--color-primary` is `var(--immich-ui-primary-500)`, so recolouring the ramp
+   cascades to buttons, links, selection, toggles, etc.
+   Selectors use `html.light` / `html.dark` / `html:root` so they outrank the
+   original single-class (`.light` / `.dark` / `:root`) declarations. */
+
+html.light {
+  --immich-ui-primary-50: #fdefe9;
+  --immich-ui-primary-100: #fbdccf;
+  --immich-ui-primary-200: #f7bda8;
+  --immich-ui-primary-300: #f2977a;
+  --immich-ui-primary-400: #ee7855;
+  --immich-ui-primary-500: #e85d38; /* primary accent on light */
+  --immich-ui-primary-600: #d24e2c;
+  --immich-ui-primary-700: #ad3f23;
+  --immich-ui-primary-800: #8a331d;
+  --immich-ui-primary-900: #6a2717;
+  --immich-ui-primary-950: #3f160c;
+  --immich-primary: 232 93 56; /* legacy rgb token = #e85d38 */
+  --immich-dark-primary: 242 164 139; /* was Google-blue tint; now dark coral */
+}
+
+html.dark {
+  --immich-ui-primary-50: #1f120d;
+  --immich-ui-primary-100: #2c1913;
+  --immich-ui-primary-200: #43231a;
+  --immich-ui-primary-300: #5b3126;
+  --immich-ui-primary-400: #7a4636;
+  --immich-ui-primary-500: #f2a48b; /* primary accent on dark (pastel coral) */
+  --immich-ui-primary-600: #f5b9a4;
+  --immich-ui-primary-700: #f8ccbd;
+  --immich-ui-primary-800: #fbded4;
+  --immich-ui-primary-900: #fdece6;
+  --immich-ui-primary-950: #fef7f4;
+  --immich-primary: 242 164 139; /* legacy rgb token = #f2a48b */
+  --immich-dark-primary: 242 164 139;
+}
+
+html:root {
+  --immich-primary: 232 93 56;
+  --immich-dark-primary: 242 164 139;
+}
